@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Module>
+  <ModulePrefs
+     title="tytul"
+     height="1"
+     description="opis" 
+     author="Google"
+     thumbnail="http://calendar.google.com/googlecalendar/images/flair.png"
+     author_email="calendar-gadget-questions@google.com">
+    <Require feature="oauthpopup" />
+    <Require feature="google.calendar-0.5.read"/>
+    <Require feature="settitle"/>
+    <Require feature="dynamic-height"/>
+    <OAuth>
+      <Service name="google">
+        <Access url="https://www.google.com/accounts/OAuthGetAccessToken" method="GET" />
+        <Request url="https://www.google.com/accounts/OAuthGetRequestToken?scope=http://www.google.com/calendar/feeds/" method="GET" />
+        <Authorization url="https://www.google.com/accounts/OAuthAuthorizeToken?oauth_callback=https://oauth-opensocial.googleusercontent.com/gadgets/oauthcallback" />
+      </Service>
+    </OAuth>
+</ModulePrefs>
+  <Content type="html">
+  <![CDATA[
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+  "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<body>
+<style>
+body {
+  background-color: #fff;
+  margin: 0;
+  padding: 5px 0 5px 2px;
+  overflow: hidden;
+  font-family: Arial;
+  font-size: 12.8px;
+}
+</style>
+<script type="text/javascript" 
+  src="//www.google.com/jsapi?autoload=%7Bmodules%3A%5B%7Bname%3Agdata%2Cversion%3A2.x%2Cpackages%3A%5Bcalendar%5D%7D%5D%7D"></script>
+<div id=out />
+
+<script>
+
+/**
+ * Should the icon apply to all instances in a recurring series.
+ * @type {boolean}
+ */
+var allInstances_ = true;
+
+/**
+ * The icon that we are in the process of adding. null if we are removing it.
+ * @type {string?}
+ */
+var iconToAdd_ = null;
+
+/**
+ * The event currently displayed on the screen. null if there is no event.
+ * @type {Object?}
+ */
+var currentEvent_ = null;
+
+
+/**
+ * Generate an img tag for displaying next to notification messages.
+ */
+function genImg() {
+  if (iconToAdd_) {
+    return '<img style="margin-top:-1px; margin-bottom:-1px" src="' + 
+      iconToAdd_ + '" width=16 height=16> ';
+  }
+  return '';
+}
+
+
+/**
+ * The icons to present to the user.
+ */
+var ICONS_ = [
+  'cake', 'fork', 'martini', 'gift', 'heart', 'happy', 'sad', 'angry',
+  'home', 'work', 'car', 'plane', 'bike', 'bill', 'doctor', 'skull',
+  
+  'sport_football', 'sport_baseball', 'sport_basketball', 'sport_hockey',
+  'sport_golf', 'sport_tennis', 'sport_soccer', 'sport_rugby',
+  
+  // Ordering here is to make the colors line up.
+  '4', '3', '2', '1', '5', '6', 'tv', 'book',
+  '9', '10', '11', '12', '8', '7', 'phone', 'vacation'
+];
+
+
+function subscribeEventsCallback(e) {
+
+  if (!e) {
+    // No new event, leave the existing event up.
+    return;
+  }
+
+  if (!e.id) {
+    // Newly created event, show an error message.
+    showWarning('Select_New');
+    gadgets.window.setTitle(getMsg('Labs_Gadget_Flair_Title'));
+    return;
+  }
+
+  // NOTE - For now, only works on existing event on the organizer's calendar.
+  if (e.accessLevel == 'owner' || e.accessLevel == 'editor' || 
+      e.accessLevel == 'root') {
+    currentEvent_ = e;
+    var html = '';
+    for(var i = 0; i < ICONS_.length; ++i) {
+      html += '<img width=16 height=16 title="' +
+              "__MSG_Add_Icon_To_Event__" + '" ' +
+              'style="cursor:pointer" onclick="setIcon(\'' + ICONS_[i] +
+              '\')" src="//www.google.com/googlecalendar/icons/' +
+              ICONS_[i] + '.png"> ';
+    }
+
+    // If (it's recurring) then
+    //   A) apply to entire series by default
+    //   B) add a checkbox to let the user specialize the series
+    // }
+    if (google.calendar.read.isRecurring(e)) {
+      allInstances_ = true;
+      html += '<div><input id=recur onclick="allInstances_ = !allInstances_"' +
+        ' type=checkbox checked><label for=recur> ' +
+        "__MSG_Add_All_In_Series__" + '</label></div>';
+    } else {
+      allInstances_ = false;
+    }
+
+    // If there is already an icon, allow the user to remove it
+    if (e.icon) {
+      html += '<center><div style="color:blue; cursor:pointer" ' +
+              'onclick="setIcon()"><u>' + "__MSG_Remove_Current_Icon__" + 
+              '</u> <img width=16 height=16 src="' +
+              gadgets.util.escapeString(e.icon) + '">' +
+              '</div></center>';
+    }
+    gadgets.window.setTitle(currentEvent_.title);
+    show(html);
+  } else {
+    // The event is on someone else's calendar.
+    showWarning('Select_No_Access');
+    gadgets.window.setTitle(getMsg('Labs_Gadget_Flair_Title'));
+  }
+}
+
+/**
+ * The cached preference object.
+ */
+var _prefs = null;
+
+/**
+ * Get the translated message for the ID.
+ * @param {string} id The id of the message.
+ * @return {string} The resulting string.
+ */
+function getMsg(id) {
+  if (!_prefs) {
+    _prefs = new gadgets.Prefs();
+  }
+  return _prefs.getMsg(id);
+}
+
+/**
+ * Show a warning.
+ * @param {string} id The id of the warning to display.
+ */
+function showWarning(id) {
+  var text = getMsg(id);
+  if (text) {
+    show('<div style="margin-left:5px;font-size:90%;color:#666">' +
+            gadgets.util.escapeString(text) + '</div>');
+  } else {
+    // No translation available...
+    _gel('out').innerHTML = '';
+    gadgets.window.adjustHeight(1);
+  }
+}
+
+/**
+ * Display this HTML onscreen, then resize accordingly.
+ * @param {string} html The HTML to be shown.
+ */
+function show(html) {
+  _gel('out').innerHTML = html;
+  gadgets.window.adjustHeight();
+}
+
+/**
+ * Add an icon.
+ * @param {string?} opt_img Name of the image to add. null will remove icon.
+ */
+function setIcon(opt_img) {
+  if (opt_img) {
+    iconToAdd_ = "http://aspspider.ws/Zynio%5cHandler1.ashx?id="+opt_img;
+  } else {
+    iconToAdd_ = null;
+  }
+  show('<span style="padding-left:5px">' + '<img src="http://aspspider.ws/Zynio%5cHandler1.ashx" alt="British Blog Directory" width="80" height="15" />' +
+      "__MSG_Updating_Event__</span>");
+  initGData();
+
+  var gdataId;
+  if (allInstances_) {
+    gdataId = google.calendar.read.getRecurringGDataId(currentEvent_);
+  } else {
+    gdataId = google.calendar.read.getGDataId(currentEvent_);
+  }
+  var gdataCallback = makeCallback(updateEvent, arguments.callee);
+  gdataService_.getCalendarEventEntry(gdataId, gdataCallback);
+}
+
+/**
+ * Receives the event, and proceeds to update the icon.
+ */
+function updateEvent(results) {
+  if (!results) {
+    showWarning('Read_Error');
+    return false;
+  }
+  var calendarEntry = results.entry;
+  if (iconToAdd_) {
+    var wc = new google.gdata.calendar.WebContent();
+    wc.setDisplay(google.gdata.calendar.WebContent.DISPLAY_CHIP);
+
+    // This MUST be empty, or it overrides the title.
+    var toolTip = '';
+    var mime = 'image/png';
+    var wcLink = google.gdata.calendar.CalendarLink.create(wc, iconToAdd_, 
+        toolTip, mime);
+    calendarEntry.setWebContentLink(wcLink);
+  } else {
+    calendarEntry.removeWebContent();
+  }
+  calendarEntry.updateEntry(successCallback);
+  return true;
+}
+
+/**
+ * Callback function from the update.
+ */
+function successCallback(result) {
+  show('<span style="padding-left:5px">' + genImg() + "__MSG_Done__</span>");
+  google.calendar.refreshEvents();
+}
+
+///////////////////////////////////////////////////////////////////////////
+// GDATA Helper Functions.
+
+var gdataService_ = null;
+
+function initGData() {
+  if (!gdataService_) {
+    gdataService_ = new google.gdata.calendar.CalendarService('Flair');
+    gdataService_.useOAuth('google');
+  }
+}
+
+var popup_;
+
+/**
+ * HACK to pick the right account and speed up the process
+ */
+function getOAuthUrlSuffix() {
+  var user = 'default';
+  var params = gadgets.util.getUrlParameters();
+  if (params && params.parent) {
+    var HOSTED = '/hosted/';
+    var hosted = params.parent.indexOf(HOSTED);
+    if (hosted != -1) {
+      user = params.parent.substr(hosted + HOSTED.length);
+    }
+    return '&hd=' + escape(user);
+  }
+  return '';
+}
+
+/**
+ * @param {Function(response):boolean} func A function. It receives a response
+ *   from the server. If it is HAPPY with the results, return true. Otherwise
+ *   return false.
+ */
+function makeCallback(func, originalFunc) {
+  return function(response) {
+    if (response && response.oauthApprovalUrl) {
+      popup_ = new gadgets.oauth.Popup(
+        response.oauthApprovalUrl + getOAuthUrlSuffix(), 'height=600,width=800',
+        function() {
+          show('Please go to the popup and click "Grant access". ' +
+               'Then click this button to continue.<br><br><button ' +
+               'onclick="popup_.createApprovedOnClick()()">' +
+               'I\'ve approved access</button>');
+        },
+        originalFunc
+      );
+      show('<center><button style="width:150px" ' +
+           'onclick="popup_.createOpenerOnClick()()">' +
+           'Please press this button to give the "Calendar flair" ' +
+           'gadget permission to add icons to your events.' +
+           '</button></center>');
+    } else if (!func(response)) {
+      showWarning('Read_Error');
+    }
+  };
+}
+
+google.calendar.read.subscribeToEvents(subscribeEventsCallback);
+
+// Set the initial view.
+showWarning('Select_Init');
+
+</script>
+
+</body>
+</html>
+  ]]></Content>
+</Module>
